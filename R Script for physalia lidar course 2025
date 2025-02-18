@@ -1,0 +1,116 @@
+# required packages -------------------------------------------------------
+
+install.packages(c("lidR", "viridis", "ggplot2", "rgl", "rgdal", "patchwork", "gstat", "terra", " webshot2"))
+require(lidR)
+require(viridis)
+require(ggplot2)
+require(rgl)
+require(rgdal)
+require(patchwork)
+require(gstat)
+require(terra)
+require(webshot2)
+library(raster)
+install.packages("rgdal", type="source")
+# importing the data ------------------------------------------------------
+#read las point cloud data
+path <- "/Users/tobiaszhorzel/Desktop/Universität/R/R_Projekte/Physalia_Lidar_2024/las_area1.laz"
+las.dat <- readLAS(path)
+
+#only focus on the height
+las.dat.xyz <- readLAS(path, select = "xyz")
+
+#only info of the upper part of the canopy
+las.dat.canopy.first <- readLAS(path, filter = "-keep_first")
+las.dat.canopy.last <- readLAS(path, filter = "-keep_last")
+
+
+# plotting the point cloud ---------------------------------------------------------------
+
+plot(las.dat.xyz)
+plot(las.dat.xyz, bg = "white") #will plot it with a white background
+#if you have a point cloud from structure from motion you can plot it with RGB as wll
+plot(las.dat.xyz, color = "RGB")
+
+
+#check the point cloud
+str(las.dat)
+las.dat$Classification
+las.dat$NumberOfReturns
+#check if the point cloud is fine
+las_check(las.dat)
+
+#plot specific things from the point cloud
+plot(las.dat, color = "Intensity",bg = "white", legend = T)
+
+#plot point cloud transects
+p1 <- c(679368, 5155974)
+p2 <- c(679468, 5156074)
+
+transect <- clip_transect(las.dat, p1, p2, width = 5)
+plot(transect)
+ggplot(payload(transect), #lets try this on baseR as well - only plot XZ
+       aes(X,Z, colour = Z)) +
+  geom_point() +
+  theme_minimal()+
+  scale_color_viridis_c(option = "viridis") # this colouration makes no sense since the same information provided by the colour is provided by the Y axis
+
+
+plot(transect$X, transect$Z)
+
+
+# cropping the point cloud -----------------------------------------------
+require(sf)
+region_of_interest <- st_read("/Users/tobiaszhorzel/Downloads/area_shp_test.shp") #to read shapefiles into R
+plot(region_of_interest)
+clipped_las <- clip_roi(las.dat, region_of_interest)
+plot(clipped_las)
+
+#crop my las with a given GPS point to a given radius
+p1 <- c(679368, 5155974)
+
+area.circle <- clip_circle(las.dat, x = p1[1], y = p1[2], radius = 50)
+plot(area.circle)
+
+
+# how to create a .gif  ---------------------------------------------------
+
+library(rgl)
+# Set output directory
+exportPath <- "/Users/tobiaszhorzel/Desktop/Universität/R/R_Projekte/Physalia_Lidar_2024"
+# Plot LiDAR data
+plot(las.dat, bg = "white")
+# Generate animation
+movie3d(
+  spin3d(axis = c(0, 0, 1), rpm = 10),  # Rotate around Z-axis, you can change 0,0,1
+  duration = 5,
+  dir = exportPath,
+  movie = "LiDAR_rotation_v4",  # Output filename (without extension)
+  type = "gif")
+
+
+
+# classification of the point cloud ---------------------------------------
+transect <- clip_transect(las.dat, p1, p2, width = 5)
+ggplot(payload(transect), #lets try this on baseR as well - only plot XZ
+       aes(X,Z, colour = Classification)) +
+  geom_point() +
+  theme_minimal()+
+  scale_color_viridis_c(option = "viridis") # this colouration makes no sense since the same information provided by the colour is provided by the Y axis
+
+
+plot(transect$X, transect$Z, col = factor(transect$Classification), pch = 16, cex = .3)
+
+#classify point clound
+
+classification.1 <- classify_ground(las.dat, algorithm = pmf(ws = 5, th = 3)) #ws windowsize; th threshhold 
+transect <- clip_transect(classification.1, p1, p2, width = 5)
+plot(transect$X, transect$Z, col = factor(transect$Classification), pch = 16, cex = .3)
+ws <- seq(3, 12, 3)
+th <- seq(0.1, 2, length.out = length(ws))
+
+classification.2 <- classify_ground(las.dat, algorithm = pmf(ws = ws, th = th)) #ws windowsize; th threshhold 
+transect <- clip_transect(classification.2, p1, p2, width = 5)
+plot(transect$X, transect$Z, col = factor(transect$Classification), pch = 16, cex = .3)
+
+
